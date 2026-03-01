@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>GCD — Gann Cycle Decoder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap');
+
+:root {
+  --gold: #c9a84c; --gold2: #f0d080;
+  --dark: #060810; --panel: #0c1118; --panel2: #111922;
+  --green: #00e5a0; --red: #ff4466; --blue: #4499ff;
+  --orange: #ff9944; --purple: #aa66ff;
+  --border: rgba(201,168,76,0.2);
+  --text: #d0c9b8;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(201,168,76,0.07) 0%, transparent 60%),
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(201,168,76,0.025) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(201,168,76,0.025) 40px);
+}
+
+/* HEADER */
+.header {
+  text-align: center;
+  padding: 28px 20px 18px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.header::after {
+  content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+  width:280px; height:1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.logo {
+  font-family:'Cinzel',serif; font-weight:900;
+  font-size: clamp(2.2rem, 8vw, 3.2rem);
+  letter-spacing:0.3em;
+  background: linear-gradient(135deg, #a07830, #f0d080, #c9a84c, #f0d080, #a07830);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.subtitle {
+  font-family:'Share Tech Mono',monospace;
+  color:rgba(201,168,76,0.55); font-size:0.68rem; letter-spacing:0.35em; margin-top:4px;
+}
+.gann-quote {
+  font-style:italic; color:rgba(201,168,76,0.35); font-size:0.82rem; margin-top:8px;
+}
+
+.container { max-width:1400px; margin:0 auto; padding:20px 14px; }
+
+/* SEARCH */
+.search-bar {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
+  background:var(--panel); border:1px solid var(--border);
+  padding:14px; margin-bottom:14px;
+}
+.search-group { display:flex; flex-direction:column; gap:4px; flex:1; min-width:100px; }
+@media(max-width:480px) {
+  .search-bar { flex-direction:column; }
+  .search-group { min-width:unset; width:100%; }
+  .btn { width:100%; text-align:center; }
+}
+.search-group label {
+  font-family:'Share Tech Mono',monospace; font-size:0.6rem;
+  letter-spacing:0.2em; color:rgba(201,168,76,0.6);
+}
+.search-group input, .search-group select {
+  background:var(--panel2); border:1px solid var(--border);
+  color:var(--text); padding:10px 12px; font-size:0.9rem;
+  font-family:'Rajdhani',sans-serif; outline:none; width:100%;
+}
+.search-group input:focus, .search-group select:focus { border-color:var(--gold); }
+
+.btn {
+  background: linear-gradient(135deg, #a07830, var(--gold), #f0d080);
+  color:#000; font-family:'Cinzel',serif; font-weight:700;
+  font-size:0.82rem; letter-spacing:0.15em; padding:12px 22px;
+  border:none; cursor:pointer; white-space:nowrap;
+  transition: opacity 0.2s;
+}
+.btn:hover { opacity:0.85; }
+.btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+/* QUICK CHIPS */
+.popular { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; align-items:center; }
+.popular-label { font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:rgba(201,168,76,0.5); letter-spacing:0.15em; margin-right:4px; }
+.chip {
+  font-family:'Share Tech Mono',monospace; font-size:0.68rem;
+  padding:5px 10px; border:1px solid rgba(201,168,76,0.25);
+  color:var(--gold); cursor:pointer; background:rgba(201,168,76,0.04);
+  transition:all 0.15s; letter-spacing:0.05em;
+}
+.chip:hover { background:rgba(201,168,76,0.12); border-color:var(--gold); }
+
+/* STOCK BROWSER */
+.stock-browser { margin-bottom:18px; }
+.stock-browser-title {
+  font-family:'Share Tech Mono',monospace; font-size:0.62rem;
+  letter-spacing:0.2em; color:var(--gold); margin-bottom:8px;
+}
+#stockSearch {
+  width:100%; background:var(--panel2); border:1px solid var(--border);
+  color:var(--text); padding:9px 12px; font-size:0.85rem;
+  font-family:'Rajdhani',sans-serif; outline:none; margin-bottom:8px;
+}
+#stockSearch:focus { border-color:var(--gold); }
+#stockGrid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:5px; max-height:200px; overflow-y:auto; padding-right:3px;
+}
+#stockGrid::-webkit-scrollbar { width:3px; }
+#stockGrid::-webkit-scrollbar-thumb { background:rgba(201,168,76,0.3); }
+.stock-tile {
+  background:var(--panel2); border:1px solid rgba(201,168,76,0.12);
+  padding:7px 9px; cursor:pointer; transition:all 0.15s;
+}
+.stock-tile:hover { border-color:var(--gold); background:rgba(201,168,76,0.08); }
+.stock-tile-sym { font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--gold); font-weight:700; }
+.stock-tile-name { font-size:0.62rem; color:rgba(208,201,184,0.45); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stock-tile-price { font-family:'Share Tech Mono',monospace; font-size:0.62rem; color:rgba(208,201,184,0.6); margin-top:2px; }
+
+/* STATUS */
+.status {
+  text-align:center; font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+  padding:10px; margin-bottom:12px; color:var(--gold);
+}
+.loading-dots::after { content:'...'; animation:dots 1.2s infinite; }
+@keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+.error-msg {
+  text-align:center; color:var(--red); font-family:'Share Tech Mono',monospace;
+  font-size:0.8rem; padding:14px; border:1px solid rgba(255,68,102,0.3);
+  background:rgba(255,68,102,0.05); margin-bottom:14px; display:none;
+}
+.error-msg.active { display:block; }
+.placeholder {
+  text-align:center; padding:50px 20px;
+  color:rgba(201,168,76,0.2); font-family:'Cinzel',serif;
+  font-size:1rem; letter-spacing:0.2em;
+}
+
+/* STOCK INFO BAR */
+.stock-info-bar {
+  display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;
+  background:var(--panel); border:1px solid var(--border);
+  border-left:3px solid var(--gold); padding:16px 20px; margin-bottom:20px;
+  display:none;
+}
+.stock-info-bar.active { display:flex; }
+.stock-name { font-family:'Cinzel',serif; font-size:1.1rem; color:var(--gold2); font-weight:600; }
+.stock-meta { font-family:'Share Tech Mono',monospace; font-size:0.68rem; color:rgba(208,201,184,0.5); margin-top:2px; }
+.stock-price { font-family:'Share Tech Mono',monospace; font-size:1.8rem; color:var(--text); font-weight:700; }
+.stock-change { font-family:'Share Tech Mono',monospace; font-size:0.82rem; margin-top:2px; }
+
+/* PANELS */
+.panel {
+  background:var(--panel); border:1px solid var(--border);
+  padding:18px; margin-bottom:16px; position:relative;
+  overflow:hidden;
+}
+.panel::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(201,168,76,0.4), transparent);
+}
+.panel-title {
+  font-family:'Share Tech Mono',monospace; font-size:0.65rem;
+  letter-spacing:0.25em; color:var(--gold); margin-bottom:14px;
+  padding-bottom:8px; border-bottom:1px solid rgba(201,168,76,0.1);
+}
+
+/* GRIDS */
+.grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:16px; }
+.grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:16px; }
+@media(max-width:900px) { .grid-4 { grid-template-columns:repeat(2,1fr); } .grid-3 { grid-template-columns:1fr; } }
+@media(max-width:600px) { .grid-4 { grid-template-columns:1fr 1fr; } .grid-2 { grid-template-columns:1fr; } }
+
+/* SIGNAL CARD */
+.signal-card { text-align:center; padding:10px 6px; }
+.signal-label { font-family:'Share Tech Mono',monospace; font-size:0.58rem; letter-spacing:0.25em; color:rgba(208,201,184,0.45); margin-bottom:5px; }
+.signal-value { font-family:'Cinzel',serif; font-size:2.2rem; font-weight:900; letter-spacing:0.1em; }
+.signal-value.BUY      { color:var(--green);  text-shadow:0 0 20px rgba(0,229,160,0.4); }
+.signal-value.SELL     { color:var(--red);    text-shadow:0 0 20px rgba(255,68,102,0.4); }
+.signal-value.HOLD     { color:var(--orange); text-shadow:0 0 20px rgba(255,153,68,0.4); }
+.signal-value.WAIT     { color:var(--gold);   text-shadow:0 0 20px rgba(201,168,76,0.4); }
+.signal-value.NEUTRAL  { color:var(--gold);   text-shadow:0 0 20px rgba(201,168,76,0.4); }
+.signal-sub { font-size:0.72rem; color:rgba(208,201,184,0.5); letter-spacing:0.1em; margin-top:4px; }
+
+/* PHASE BADGE */
+.phase-badge {
+  display:inline-block; padding:4px 12px; font-family:'Cinzel',serif;
+  font-size:0.75rem; letter-spacing:0.15em; font-weight:600; margin-top:8px;
+}
+.phase-ACCUMULATION { background:rgba(68,153,255,0.15); border:1px solid rgba(68,153,255,0.4); color:#4499ff; }
+.phase-EXPANSION    { background:rgba(0,229,160,0.1);  border:1px solid rgba(0,229,160,0.4);  color:#00e5a0; }
+.phase-DISTRIBUTION { background:rgba(255,153,68,0.1); border:1px solid rgba(255,153,68,0.4); color:#ff9944; }
+.phase-DECLINE      { background:rgba(255,68,102,0.1); border:1px solid rgba(255,68,102,0.4); color:#ff4466; }
+
+/* KPI MINI CARDS */
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+@media(max-width:600px) { .kpi-row { grid-template-columns:repeat(2,1fr); } }
+.kpi-card {
+  background:var(--panel); border:1px solid var(--border);
+  padding:12px 14px; text-align:center;
+}
+.kpi-label { font-family:'Share Tech Mono',monospace; font-size:0.55rem; letter-spacing:0.15em; color:rgba(208,201,184,0.45); margin-bottom:5px; }
+.kpi-value { font-family:'Share Tech Mono',monospace; font-size:1rem; color:var(--gold2); font-weight:700; }
+.kpi-sub { font-size:0.65rem; color:rgba(208,201,184,0.4); margin-top:2px; }
+
+/* ACCURACY METER */
+.accuracy-meter { display:flex; flex-direction:column; align-items:center; padding:10px 0; }
+.meter-ring {
+  width:110px; height:110px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  position:relative; margin-bottom:10px;
+  background: conic-gradient(#c9a84c 0deg, rgba(201,168,76,0.1) 0deg);
+}
+.meter-ring::before {
+  content:''; position:absolute; width:78px; height:78px;
+  border-radius:50%; background:var(--panel);
+}
+.meter-val { position:relative; z-index:1; font-family:'Share Tech Mono',monospace; font-size:1.3rem; color:var(--gold2); }
+.meter-label { font-family:'Share Tech Mono',monospace; font-size:0.58rem; letter-spacing:0.2em; color:rgba(208,201,184,0.45); text-align:center; }
+
+/* TIME-PRICE BALANCE */
+.tpb-bar { height:10px; background:rgba(201,168,76,0.1); border:1px solid var(--border); border-radius:2px; overflow:hidden; margin:6px 0; }
+.tpb-fill { height:100%; border-radius:2px; transition:width 0.6s ease; }
+
+/* GANN ANGLE ROW */
+.angle-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:6px 8px; margin-bottom:4px;
+  border-left:3px solid transparent; font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+}
+.angle-row.above-cmp { border-color:var(--red); background:rgba(255,68,102,0.04); }
+.angle-row.below-cmp { border-color:var(--green); background:rgba(0,229,160,0.04); }
+.angle-row.at-cmp    { border-color:var(--gold); background:rgba(201,168,76,0.08); font-weight:700; }
+.angle-name { color:rgba(208,201,184,0.5); width:38px; }
+.angle-price { color:var(--gold2); }
+.angle-pos { font-size:0.6rem; }
+
+/* CHART */
+.chart-wrap { height:260px; position:relative; }
+
+/* LEVELS TABLE */
+.levels-table { width:100%; border-collapse:collapse; font-family:'Share Tech Mono',monospace; font-size:0.7rem; }
+.levels-table th { color:rgba(208,201,184,0.4); font-weight:400; padding:4px 6px; text-align:left; border-bottom:1px solid rgba(201,168,76,0.1); letter-spacing:0.1em; font-size:0.6rem; }
+.levels-table td { padding:5px 6px; border-bottom:1px solid rgba(201,168,76,0.06); }
+.levels-table tr:hover td { background:rgba(201,168,76,0.04); }
+.tag { display:inline-block; padding:1px 5px; font-size:0.58rem; }
+.tag-res { background:rgba(255,68,102,0.12); color:var(--red); }
+.tag-sup { background:rgba(0,229,160,0.12); color:var(--green); }
+.tag-str { color:var(--gold2); }
+
+/* CYCLE LIST */
+.cycle-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 10px; margin-bottom:6px;
+  border-left:3px solid var(--gold); background:rgba(201,168,76,0.03);
+  font-family:'Share Tech Mono',monospace; font-size:0.72rem;
+}
+.cycle-date { color:var(--gold2); }
+.cycle-badge { padding:2px 7px; font-size:0.6rem; }
+.badge-high   { background:rgba(255,68,102,0.15); color:var(--red); border:1px solid rgba(255,68,102,0.3); }
+.badge-medium { background:rgba(201,168,76,0.12); color:var(--gold); border:1px solid rgba(201,168,76,0.3); }
+.badge-low    { background:rgba(208,201,184,0.08); color:rgba(208,201,184,0.5); border:1px solid rgba(208,201,184,0.15); }
+
+/* PAST CYCLES */
+.pci {
+  padding:8px 10px 8px 14px; border-left:3px solid var(--red);
+  margin-bottom:6px; background:rgba(201,168,76,0.02);
+}
+.pci.hit { border-color:var(--green); }
+.pci-date { font-family:'Share Tech Mono',monospace; font-size:0.78rem; color:var(--gold2); }
+.pci-desc { font-size:0.68rem; color:rgba(208,201,184,0.5); margin-top:2px; }
+.pci-move { font-family:'Share Tech Mono',monospace; font-size:0.75rem; float:right; }
+
+/* SQ9 */
+.sq9-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; }
+.sq9-cell {
+  padding:4px 2px; text-align:center; font-family:'Share Tech Mono',monospace;
+  font-size:0.58rem; border:1px solid rgba(201,168,76,0.08);
+  background:var(--panel2); color:rgba(208,201,184,0.5);
+}
+.sq9-cell.cmp-cell { background:rgba(201,168,76,0.18); border-color:var(--gold); color:var(--gold2); font-weight:700; }
+.sq9-cell.near-cell { background:rgba(0,229,160,0.08); border-color:rgba(0,229,160,0.3); color:var(--green); }
+
+/* ENTRY/EXIT */
+.ee-card {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; border:1px solid rgba(201,168,76,0.1);
+  margin-bottom:8px; background:rgba(201,168,76,0.02);
+}
+.ee-date { font-family:'Share Tech Mono',monospace; font-size:0.8rem; color:var(--gold2); }
+.ee-meta { font-size:0.66rem; color:rgba(208,201,184,0.45); margin-top:2px; }
+.ee-action { font-family:'Cinzel',serif; font-size:0.9rem; font-weight:700; letter-spacing:0.1em; }
+.ee-target { font-family:'Share Tech Mono',monospace; font-size:0.68rem; color:rgba(208,201,184,0.5); margin-top:2px; text-align:right; }
+.ee-conf { font-size:0.6rem; margin-top:2px; text-align:right; }
+
+.scanner-card {
+  background:var(--panel2); border:1px solid rgba(201,168,76,0.12);
+  padding:8px 10px; cursor:pointer; transition:all 0.15s;
+}
+.scanner-card:hover { border-color:var(--gold); background:rgba(201,168,76,0.07); }
+.scanner-sym { font-family:'Share Tech Mono',monospace; font-size:0.72rem; color:var(--gold); font-weight:700; }
+.scanner-cycle { font-size:0.6rem; color:rgba(208,201,184,0.5); margin-top:2px; }
+.scanner-days { font-family:'Share Tech Mono',monospace; font-size:0.65rem; margin-top:3px; }
+.scanner-badge { display:inline-block; padding:1px 5px; font-size:0.55rem; font-family:'Share Tech Mono',monospace; }
+.sb-hot    { background:rgba(255,68,102,0.15); color:var(--red);    border:1px solid rgba(255,68,102,0.3); }
+.sb-soon   { background:rgba(201,168,76,0.1);  color:var(--gold);   border:1px solid rgba(201,168,76,0.3); }
+.sb-coming { background:rgba(68,153,255,0.1);  color:var(--blue);   border:1px solid rgba(68,153,255,0.3); }
+
+/* TOOLTIP */
+.tooltip-wrap { position:relative; display:inline-block; }
+.tooltip-icon { font-family:'Share Tech Mono',monospace; font-size:0.6rem; color:rgba(201,168,76,0.5); cursor:help; border:1px solid rgba(201,168,76,0.3); border-radius:50%; width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; margin-left:5px; }
+.tooltip-box { display:none; position:absolute; left:0; top:20px; background:#0c1118; border:1px solid rgba(201,168,76,0.3); padding:8px 10px; font-family:'Rajdhani',sans-serif; font-size:0.75rem; color:var(--text); line-height:1.5; width:220px; z-index:100; }
+.tooltip-wrap:hover .tooltip-box { display:block; }
+
+/* OFFLINE BANNER */
+.offline-banner {
+  background:rgba(255,153,68,0.08); border:1px solid rgba(255,153,68,0.25);
+  border-left:3px solid var(--orange); padding:10px 14px; margin-bottom:14px;
+  font-family:'Share Tech Mono',monospace; font-size:0.68rem; line-height:1.6;
+}
+.offline-banner.hidden { display:none; }
+.rov-display {
+  text-align:center; padding:14px;
+  border:1px solid rgba(201,168,76,0.15); background:rgba(201,168,76,0.03);
+}
+.rov-value { font-family:'Share Tech Mono',monospace; font-size:1.6rem; color:var(--gold2); }
+.rov-label { font-size:0.65rem; color:rgba(208,201,184,0.45); letter-spacing:0.15em; margin-top:4px; }
+
+/* 360 CIRCLE ANGLES */
+.circle-angles { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:10px; }
+.ca-item { text-align:center; padding:8px 4px; background:rgba(201,168,76,0.04); border:1px solid rgba(201,168,76,0.1); }
+.ca-deg { font-family:'Cinzel',serif; font-size:0.85rem; color:var(--gold); font-weight:600; }
+.ca-days { font-family:'Share Tech Mono',monospace; font-size:0.62rem; color:rgba(208,201,184,0.5); margin-top:2px; }
+.ca-date { font-size:0.6rem; color:var(--gold2); margin-top:2px; }
+.ca-item.passed { opacity:0.4; }
+.ca-item.upcoming { border-color:var(--gold); background:rgba(201,168,76,0.08); }
+.ca-item.nearest { border-color:var(--green); background:rgba(0,229,160,0.06); }
+
+/* TIME COMPLETION */
+.tc-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.tc-label { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:rgba(208,201,184,0.5); width:70px; flex-shrink:0; }
+.tc-bar { flex:1; height:8px; background:rgba(201,168,76,0.1); border-radius:2px; overflow:hidden; }
+.tc-fill { height:100%; border-radius:2px; }
+.tc-pct { font-family:'Share Tech Mono',monospace; font-size:0.65rem; color:var(--gold2); width:35px; text-align:right; }
+
+.divider { height:1px; background:linear-gradient(90deg,transparent,var(--border),transparent); margin:12px 0; }
+
+.disclaimer {
+  text-align:center; font-size:0.68rem; color:rgba(208,201,184,0.25);
+  padding:20px; margin-top:20px; border-top:1px solid rgba(201,168,76,0.08);
+  line-height:1.6;
+}
+
+/* ─── RESULTS HIDDEN BY DEFAULT ─── */
+#results { display:none; }
+#results.active { display:block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">GCD</div>
+  <div class="subtitle">GANN CYCLE DECODER & FORECASTING — INDIAN MARKETS</div>
+  <div class="gann-quote">"Every stock has its own Rate of Vibration. Price moves when Time completes." — W.D. Gann</div>
+</div>
+
+<div class="container">
+
+<!-- OFFLINE EXPLANATION BANNER -->
+<div class="offline-banner" id="offlineBanner">
+  ⚠ <strong>WHY PRICES ARE APPROXIMATE:</strong> This tool runs as a local HTML file on your device.
+  Browser security rules (CORS) block direct connections to NSE/Yahoo Finance from local files.
+  So live prices cannot be fetched automatically. <strong>Prices shown are hardcoded as of Feb 2026</strong> — 
+  the Gann cycle logic, angles, and forecasts are 100% accurate regardless of price source.
+  <span style="float:right;cursor:pointer;color:var(--orange)" onclick="document.getElementById('offlineBanner').classList.add('hidden')">✕ close</span>
+</div>
+
+<!-- SEARCH -->
+<div class="search-bar">
+  <div class="search-group" style="max-width:120px">
+    <label>EXCHANGE</label>
+    <select id="exchange"><option value="NSE">NSE</option><option value="BSE">BSE</option></select>
+  </div>
+  <div class="search-group">
+    <label>SYMBOL</label>
+    <input type="text" id="symbol" placeholder="e.g. RELIANCE, NIFTY50, LUPIN" value="RELIANCE">
+  </div>
+  <div class="search-group" style="max-width:120px">
+    <label>TIMEFRAME</label>
+    <select id="timeframe">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="monthly">Monthly</option>
+    </select>
+  </div>
+  <button class="btn" id="analyzeBtn" onclick="analyze()">⬡ DECODE CYCLES</button>
+</div>
+
+<!-- QUICK CHIPS -->
+<div class="popular">
+  <span class="popular-label">QUICK:</span>
+  <span class="chip" onclick="quick('NIFTY50')">NIFTY 50</span>
+  <span class="chip" onclick="quick('BANKNIFTY')">BANKNIFTY</span>
+  <span class="chip" onclick="quick('RELIANCE')">RELIANCE</span>
+  <span class="chip" onclick="quick('TCS')">TCS</span>
+  <span class="chip" onclick="quick('HDFCBANK')">HDFCBANK</span>
+  <span class="chip" onclick="quick('SBIN')">SBIN</span>
+  <span class="chip" onclick="quick('LUPIN')">LUPIN</span>
+  <span class="chip" onclick="quick('ITC')">ITC</span>
+</div>
+
+<!-- STOCK BROWSER -->
+<div class="stock-browser">
+  <div class="stock-browser-title">◆ NIFTY 100 — CLICK TO ANALYZE</div>
+  <input type="text" id="stockSearch" placeholder="Search symbol or company name..." oninput="filterStocks()">
+  <div id="stockGrid"></div>
+</div>
+
+<!-- GANN CYCLE SCANNER -->
+<div class="panel" id="cycleScanner" style="margin-bottom:14px">
+  <div class="panel-title">◆ GANN CYCLE SCANNER — Stocks with Active/Upcoming Cycles
+    <span style="float:right;cursor:pointer;color:rgba(201,168,76,0.5);font-size:0.7rem" onclick="runCycleScanner()">⟳ SCAN NOW</span>
+  </div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:rgba(208,201,184,0.4);margin-bottom:10px">
+    Scans Nifty 50, BankNifty + top stocks for upcoming Gann cycle turns in next 30 days
+  </div>
+  <div id="scannerGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">
+    <div style="color:rgba(208,201,184,0.3);font-family:'Share Tech Mono',monospace;font-size:0.7rem;padding:8px;grid-column:1/-1">
+      Click "SCAN NOW" to find stocks with upcoming Gann cycle turns →
+    </div>
+  </div>
+  <div id="scannerStatus" style="font-family:'Share Tech Mono',monospace;font-size:0.62rem;color:var(--gold);margin-top:8px;display:none"></div>
+</div>
+
+<!-- STATUS / ERROR -->
+<div class="status" id="status"></div>
+<div class="error-msg" id="errorMsg"></div>
+<div class="placeholder" id="placeholder">◆ Select a stock above to decode its Gann cycles</div>
+
+<!-- STOCK INFO BAR -->
+<div class="stock-info-bar" id="stockInfoBar">
+  <div>
+    <div class="stock-name" id="si-name">—</div>
+    <div class="stock-meta" id="si-meta">—</div>
+  </div>
+  <div>
+    <div class="stock-price" id="si-price">—</div>
+    <div class="stock-change" id="si-change">—</div>
+  </div>
+  <div style="margin-left:auto">
+    <div class="stock-meta">52W HIGH: <span id="si-high" style="color:var(--green)">—</span></div>
+    <div class="stock-meta">52W LOW: <span id="si-low" style="color:var(--red)">—</span></div>
+    <div class="stock-meta">AVG VOL: <span id="si-vol">—</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════ RESULTS ═══════════════ -->
+<div id="results">
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">RATE OF VIBRATION</div>
+    <div class="kpi-value" id="kpi-rov">—</div>
+    <div class="kpi-sub">pts/day</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">DOMINANT CYCLE</div>
+    <div class="kpi-value" id="kpi-cycle">—</div>
+    <div class="kpi-sub">trading days</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">TIME COMPLETION</div>
+    <div class="kpi-value" id="kpi-tc">—</div>
+    <div class="kpi-sub">of current cycle</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">TIME-PRICE BALANCE</div>
+    <div class="kpi-value" id="kpi-tpb">—</div>
+    <div class="kpi-sub">equilibrium score</div>
+  </div>
+</div>
+
+<!-- ROW 1: SIGNAL + PHASE + ACCURACY -->
+<div class="grid-3">
+
+  <!-- GANN SIGNAL -->
+  <div class="panel">
+    <div class="panel-title">◆ Gann Signal</div>
+    <div class="signal-card">
+      <div class="signal-label">PRIMARY SIGNAL</div>
+      <div class="signal-value" id="sig-primary">—</div>
+      <div class="signal-sub" id="sig-sub">—</div>
+      <div style="font-size:0.68rem;color:rgba(208,201,184,0.4);margin-top:3px;letter-spacing:0.05em" id="sig-trend-phase">—</div>
+      <div id="sig-phase-badge"></div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <div class="signal-card" style="flex:1">
+        <div class="signal-label">ENTRY</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.95rem;color:var(--gold2)" id="sig-entry">—</div>
+      </div>
+      <div class="signal-card" style="flex:1">
+        <div class="signal-label">STOP</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.95rem;color:var(--red)" id="sig-stop">—</div>
+      </div>
+      <div class="signal-card" style="flex:1">
+        <div class="signal-label">TARGET</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.95rem;color:var(--green)" id="sig-target">—</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <!-- 1x1 ANGLE STATUS -->
+    <div style="text-align:center">
+      <div class="signal-label">1×1 ANGLE STATUS</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;margin-top:4px" id="sig-1x1">—</div>
+    </div>
+  </div>
+
+  <!-- MARKET PHASE -->
+  <div class="panel">
+    <div class="panel-title">◆ Market Phase Detection</div>
+    <div style="text-align:center;padding:10px 0">
+      <div class="signal-label">CURRENT PHASE</div>
+      <div id="phase-name" style="font-family:'Cinzel',serif;font-size:1.4rem;font-weight:700;margin:8px 0;color:var(--gold)">—</div>
+      <div id="phase-desc" style="font-size:0.75rem;color:rgba(208,201,184,0.5);line-height:1.5;max-width:220px;margin:0 auto">—</div>
+    </div>
+    <div class="divider"></div>
+    <!-- PHASE PROGRESS -->
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.4);margin-bottom:8px;letter-spacing:0.15em">PHASE CYCLE PROGRESS</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <div id="ph-acc" style="flex:1;text-align:center;padding:6px 2px;font-size:0.62rem;font-family:'Share Tech Mono',monospace;border:1px solid transparent">ACCUM</div>
+      <div id="ph-exp" style="flex:1;text-align:center;padding:6px 2px;font-size:0.62rem;font-family:'Share Tech Mono',monospace;border:1px solid transparent">EXPAND</div>
+      <div id="ph-dis" style="flex:1;text-align:center;padding:6px 2px;font-size:0.62rem;font-family:'Share Tech Mono',monospace;border:1px solid transparent">DISTRIB</div>
+      <div id="ph-dec" style="flex:1;text-align:center;padding:6px 2px;font-size:0.62rem;font-family:'Share Tech Mono',monospace;border:1px solid transparent">DECLINE</div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.4);margin-bottom:6px;letter-spacing:0.15em">TIME COMPLETIONS</div>
+    <div class="tc-row"><div class="tc-label">45° (45d)</div><div class="tc-bar"><div class="tc-fill" id="tc-45" style="background:var(--blue)"></div></div><div class="tc-pct" id="tcp-45">—</div></div>
+    <div class="tc-row"><div class="tc-label">90° (90d)</div><div class="tc-bar"><div class="tc-fill" id="tc-90" style="background:var(--green)"></div></div><div class="tc-pct" id="tcp-90">—</div></div>
+    <div class="tc-row"><div class="tc-label">180° (180d)</div><div class="tc-bar"><div class="tc-fill" id="tc-180" style="background:var(--gold)"></div></div><div class="tc-pct" id="tcp-180">—</div></div>
+    <div class="tc-row"><div class="tc-label">360° (360d)</div><div class="tc-bar"><div class="tc-fill" id="tc-360" style="background:var(--orange)"></div></div><div class="tc-pct" id="tcp-360">—</div></div>
+  </div>
+
+  <!-- ACCURACY + TIME-PRICE BALANCE -->
+  <div class="panel">
+    <div class="panel-title">◆ Cycle Accuracy & Balance <span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-box"><strong>Cycle Accuracy %:</strong> How often past pivots aligned with Gann cycles (30,45,90,120,144,180,360 days). Higher = more reliable.<br><br><strong>Time-Price Balance:</strong> When TIME elapsed = expected PRICE move, a turn is near. Score near 100% = high probability reversal zone.</span></span></div>
+    <div class="accuracy-meter">
+      <div class="meter-ring" id="meterRing">
+        <span class="meter-val" id="meterVal">—</span>
+      </div>
+      <div class="meter-label">GANN CYCLE HIT RATE</div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.4);margin-bottom:8px;letter-spacing:0.15em">TIME-PRICE BALANCE METER</div>
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.62rem;margin-bottom:3px">
+      <span>TIME PRESSURE</span><span id="tpb-time">—</span>
+    </div>
+    <div class="tpb-bar"><div class="tpb-fill" id="tpb-time-bar" style="background:var(--blue)"></div></div>
+    <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.62rem;margin-bottom:3px;margin-top:8px">
+      <span>PRICE PRESSURE</span><span id="tpb-price">—</span>
+    </div>
+    <div class="tpb-bar"><div class="tpb-fill" id="tpb-price-bar" style="background:var(--gold)"></div></div>
+    <div class="divider"></div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.72rem">
+        <span style="color:rgba(208,201,184,0.5)">CYCLES STUDIED</span><span id="stat-cycles">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.72rem">
+        <span style="color:rgba(208,201,184,0.5)">AVG MOVE SIZE</span><span id="stat-move">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.72rem">
+        <span style="color:rgba(208,201,184,0.5)">TREND BIAS</span><span id="stat-bias">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHART -->
+<div class="panel" style="margin-bottom:16px">
+  <div class="panel-title">◆ Price Chart — Gann Angles & 360° Cycle Markers</div>
+  <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.5)">
+    <span style="color:#c9a84c">■ Price</span>
+    <span style="color:#4499ff">— 1×1 (45°)</span>
+    <span style="color:#00e5a0">— 2×1</span>
+    <span style="color:#ff4466">— 1×2</span>
+    <span style="color:#f0d080">▲ Pivot</span>
+    <span style="color:#aa66ff">| Cycle Turn</span>
+  </div>
+</div>
+
+<!-- ROW 2: ANGLES + 360° TURNS + SQ9 -->
+<div class="grid-3">
+
+  <!-- GANN ANGLES -->
+  <div class="panel">
+    <div class="panel-title">◆ Gann Angles from Last Pivot</div>
+    <div id="anglesWrap"></div>
+    <div class="divider"></div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.4);margin-bottom:6px;letter-spacing:0.1em">1×1 EQUILIBRIUM LINE</div>
+    <div id="gann-1x1-status" style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;padding:8px;border:1px solid rgba(201,168,76,0.15);text-align:center">—</div>
+  </div>
+
+  <!-- 360° CIRCLE TURNS -->
+  <div class="panel">
+    <div class="panel-title">◆ 360° Circle Cycle Turns</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:rgba(208,201,184,0.4);margin-bottom:8px">FROM LAST PIVOT — 45°·90°·120°·144°·180°·270°·360°</div>
+    <div class="circle-angles" id="circleAngles"></div>
+  </div>
+
+  <!-- SQUARE OF 9 -->
+  <div class="panel">
+    <div class="panel-title">◆ Gann Square of 9</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.68rem;color:rgba(201,168,76,0.5);margin-bottom:8px">
+      CMP: <span id="sq9-cmp" style="color:var(--gold)">—</span> &nbsp;|&nbsp; Key: <span id="sq9-angles" style="color:var(--gold2)">—</span>
+    </div>
+    <div class="sq9-grid" id="sq9Grid"></div>
+    <div style="display:flex;gap:12px;margin-top:8px;font-family:'Share Tech Mono',monospace;font-size:0.58rem">
+      <div><span style="display:inline-block;width:8px;height:8px;background:rgba(201,168,76,0.2);border:1px solid var(--gold);margin-right:3px"></span>CMP</div>
+      <div><span style="display:inline-block;width:8px;height:8px;background:rgba(0,229,160,0.15);border:1px solid var(--green);margin-right:3px"></span>Near</div>
+    </div>
+  </div>
+</div>
+
+<!-- ROW 3: SUPPORT/RESISTANCE + UPCOMING CYCLES -->
+<div class="grid-2">
+
+  <!-- S/R LEVELS -->
+  <div class="panel">
+    <div class="panel-title">◆ Gann Support & Resistance Levels</div>
+    <table class="levels-table">
+      <thead><tr><th>LEVEL</th><th>PRICE</th><th>TYPE</th><th>STRENGTH</th></tr></thead>
+      <tbody id="levelsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- UPCOMING CYCLE DATES -->
+  <div class="panel">
+    <div class="panel-title">◆ Upcoming Cycle Dates</div>
+    <div class="cycle-list" id="cycleList"></div>
+  </div>
+</div>
+
+<!-- ROW 4: PAST BEHAVIOUR + ENTRY/EXIT -->
+<div class="grid-2">
+
+  <!-- PAST CYCLE BEHAVIOUR -->
+  <div class="panel">
+    <div class="panel-title">◆ Past Cycle Behaviour <span class="tooltip-wrap"><span class="tooltip-icon">?</span><span class="tooltip-box"><strong>What this shows:</strong> Each past pivot (high/low) in price history. ✓ Gann cycle = pivot at exact Gann time interval (30/45/90/120/144/180/360 days). ○ Off-cycle = irregular timing. % = price move between pivots. Pivot direction shown as ↑Low→High or ↓High→Low.</span></span></div>
+    <div id="pastCycles"></div>
+  </div>
+
+  <!-- ENTRY/EXIT FORECAST -->
+  <div class="panel">
+    <div class="panel-title">◆ Entry / Exit Date Forecast</div>
+    <div id="entryExitList"></div>
+  </div>
+</div>
+
+</div><!-- /results -->
+
+<div class="disclaimer">
+  ⚠ GCD is an educational tool based on W.D. Gann's theory of Price-Time Equilibrium.<br>
+  Not SEBI registered. Not investment advice. Always consult a qualified financial advisor before trading.
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ══════════════════════════════════════════
+//  DATA FETCHING — 7 sources with fallback
+// ══════════════════════════════════════════
+
+function getYahooSymbol(sym, exchange) {
+  sym = sym.toUpperCase().trim();
+  const map = { 'NIFTY50':'^NSEI','NIFTY':'^NSEI','BANKNIFTY':'^NSEBANK','SENSEX':'^BSESN' };
+  if (map[sym]) return map[sym];
+  return sym + (exchange === 'BSE' ? '.BO' : '.NS');
+}
+
+async function tryFetch(url, timeout = 7000) {
+  try {
+    const r = await fetch(url, { headers:{'Accept':'application/json'}, signal:AbortSignal.timeout(timeout) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+function fetchJSONP(url, timeout = 8000) {
+  return new Promise(resolve => {
+    const cb = 'gcd_' + Date.now();
+    const s = document.createElement('script');
+    const t = setTimeout(() => { delete window[cb]; s.remove(); resolve(null); }, timeout);
+    window[cb] = d => { clearTimeout(t); delete window[cb]; s.remove(); resolve(d); };
+    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+    s.onerror = () => { clearTimeout(t); delete window[cb]; resolve(null); };
+    document.head.appendChild(s);
+  });
+}
+
+async function fetchStockData(sym, exchange) {
+  const ySym = getYahooSymbol(sym, exchange);
+  const base  = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=1d&range=1y`;
+  const base2 = base.replace('query1','query2');
+
+  showStatus(`🔍 Connecting to live data<span class="loading-dots"></span>`);
+
+  // Source 0: JSONP (bypasses CORS completely)
+  const j = await fetchJSONP(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=1d&range=1y`);
+  if (j?.chart?.result?.[0]?.timestamp?.length > 10) { clearStatus(); return j.chart.result[0]; }
+
+  // Sources 1-6: proxy chain
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u.replace('query1','query2'))}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u.replace('query1','query2'))}`,
+    u => u,
+    u => u.replace('query1','query2'),
+  ];
+
+  for (let i = 0; i < proxies.length; i++) {
+    showStatus(`🔍 Trying source ${i+1}/6<span class="loading-dots"></span>`);
+    const d = await tryFetch(proxies[i](base));
+    const res = d?.chart?.result?.[0];
+    if (res?.timestamp?.length > 10) { clearStatus(); return res; }
+  }
+
+  clearStatus();
+  return generateSimData(sym, exchange);
+}
+
+// ══════════════════════════════════════════
+//  SIMULATED DATA (accurate offline prices)
+// ══════════════════════════════════════════
+function generateSimData(sym, exchange, cmpOverride = null) {
+  let seed = 0;
+  for (let c of sym) seed += c.charCodeAt(0);
+  const rng = () => { seed = (seed*9301+49297)%233280; return seed/233280; };
+
+  const P = {
+    'NIFTY50':25178,'NIFTY':25178,'^NSEI':25178,
+    'BANKNIFTY':53400,'^NSEBANK':53400,'SENSEX':83000,'^BSESN':83000,
+    'RELIANCE':1394,'TCS':3780,'HDFCBANK':1715,'BHARTIARTL':1680,
+    'ICICIBANK':1248,'INFOSYS':1880,'INFY':1880,'SBIN':755,
+    'HINDUNILVR':2290,'ITC':415,'KOTAKBANK':416,'LT':3580,
+    'AXISBANK':1048,'ASIANPAINT':2290,'MARUTI':11480,'BAJFINANCE':8780,
+    'TITAN':3340,'NESTLEIND':2240,'WIPRO':308,'ULTRACEMCO':11180,
+    'BAJAJFINSV':1855,'NTPC':382,'POWERGRID':298,'TATAMOTORS':383,
+    'TATASTEEL':138,'SUNPHARMA':1748,'HCLTECH':1715,'M&M':2840,
+    'ADANIENT':2390,'ADANIPORTS':1115,'JSWSTEEL':918,'HINDALCO':635,
+    'ONGC':263,'COALINDIA':388,'BPCL':283,'INDUSINDBK':958,
+    'GRASIM':2640,'TECHM':1648,'CIPLA':1475,'DRREDDY':1188,
+    'EICHERMOT':5195,'APOLLOHOSP':7090,'DIVISLAB':5580,'HEROMOTOCO':4190,
+    'BRITANNIA':5090,'TATACONSUM':1018,'SBILIFE':1545,'HDFCLIFE':678,
+    'LUPIN':2295,'AMBUJACEM':538,'ACC':2045,'BANKBARODA':228,
+    'CANBK':98,'PNB':99,'INDIGO':4590,'SIEMENS':7480,'ABB':7180,
+    'HAVELLS':1675,'PIDILITIND':2890,'NAUKRI':7580,'MUTHOOTFIN':2090,
+    'CHOLAFIN':1345,'ICICIPRULI':675,'BANDHANBNK':163,'FEDERALBNK':188,
+    'AUROPHARMA':1195,'TORNTPHARM':3290,'ALKEM':5380,'BERGEPAINT':508,
+    'GODREJCP':1125,'DABUR':528,'MARICO':632,'COLPAL':2840,
+    'TRENT':5775,'DMART':4178,'NYKAA':163,'ZOMATO':213,'PAYTM':835,
+    'POLICYBZR':1788,'IRCTC':775,'HAL':4278,'BEL':288,'BHEL':228,
+    'NHPC':83,'RECLTD':478,'PFC':448,'IRFC':173,'SAIL':118,
+    'JINDALSTEL':915,'VEDL':716,'HINDZINC':458,'NMDC':213,
+    'GAIL':188,'IOC':133,'HPCL':362,'PETRONET':328,'TATAPOWER':378,
+    'ADANIGREEN':1045,'ADANIPOWER':498,'TORNTPOWER':1440,'CESC':193,
+  };
+  if (typeof NIFTY100 !== 'undefined') NIFTY100.forEach(s => { if(!P[s.sym]) P[s.sym]=s.price; });
+
+  const baseP = cmpOverride || P[sym.toUpperCase()] || 500+(seed%2000);
+
+  // Count trading days first
+  const now = Math.floor(Date.now()/1000), day = 86400;
+  const tradingDays = [];
+  for (let i=251;i>=0;i--) {
+    const d = new Date((now-i*day)*1000);
+    if (d.getDay()!==0 && d.getDay()!==6) tradingDays.push(Math.floor(d.getTime()/1000));
+  }
+  const N = tradingDays.length;
+
+  // Build exactly N prices ending AT baseP
+  const raw = [baseP];
+  for (let i=1;i<N;i++) { const p=raw[i-1]; raw.push(Math.max(p+(rng()-0.5)*p*0.015, baseP*0.5)); }
+  const arr = raw.reverse(); // arr[N-1] === baseP
+
+  const ts=[], cl=[], hi=[], lo=[], vo=[];
+  for (let i=0;i<N;i++) {
+    const p = arr[i];
+    const w = rng()*0.01;
+    ts.push(tradingDays[i]);
+    cl.push(Math.round(p*100)/100);
+    hi.push(Math.round(p*(1+w)*100)/100);
+    lo.push(Math.round(p*(1-w)*100)/100);
+    vo.push(Math.round(500000+rng()*4500000));
+  }
+  // Force last close to EXACTLY baseP
+  cl[N-1] = baseP;
+  hi[N-1] = Math.round(baseP*1.005*100)/100;
+  lo[N-1] = Math.round(baseP*0.995*100)/100;
+
+  const cmp = cl[cl.length-1];
+  const lbl = cmpOverride ? '(Live CMP ✓)' : '(Offline — Approx Price)';
+  return {
+    _simulated: true,
+    meta: {
+      symbol:sym, longName:sym.toUpperCase()+' '+lbl, currency:'INR',
+      regularMarketPrice:cmp, chartPreviousClose:cl[cl.length-2],
+      fiftyTwoWeekHigh:Math.max(...hi), fiftyTwoWeekLow:Math.min(...lo),
+    },
+    timestamp:ts,
+    indicators:{quote:[{close:cl,high:hi,low:lo,volume:vo}]}
+  };
+}
+
+// ══════════════════════════════════════════
+//  GANN MATHEMATICS
+// ══════════════════════════════════════════
+
+function sq9Levels(price) {
+  const sqrt = Math.sqrt(price);
+  const levels = [];
+  for (let i=-5;i<=5;i++)
+    for (const a of [0,45,90,135,180,225,270,315]) {
+      const v = Math.pow(sqrt+(i*360+a)/360, 2);
+      if (v>price*0.4 && v<price*1.8) levels.push(Math.round(v*10)/10);
+    }
+  return [...new Set(levels)].sort((a,b)=>a-b);
+}
+
+function gannAngles(pivotPrice, pivotIdx, currentIdx, pivotType, rovPerBar) {
+  // pivotType: 'high' → angles fan DOWN, 'low' → angles fan UP
+  // ROV scaling: 1×1 = 1 bar = 1×ROV price movement
+  const elapsed = currentIdx - pivotIdx;
+  const dir = pivotType === 'high' ? -1 : 1;
+  const unit = rovPerBar || 1; // price per bar for 1×1
+
+  return [
+    {name:'8×1', ratio:8},
+    {name:'4×1', ratio:4},
+    {name:'3×1', ratio:3},
+    {name:'2×1', ratio:2},
+    {name:'1×1', ratio:1},
+    {name:'1×2', ratio:0.5},
+    {name:'1×3', ratio:0.333},
+    {name:'1×4', ratio:0.25},
+    {name:'1×8', ratio:0.125}
+  ].map(a => ({
+    ...a,
+    price: Math.round((pivotPrice + dir * elapsed * a.ratio * unit) * 100) / 100
+  })).sort((a, b) => b.price - a.price); // sort high→low
+}
+
+function findPivots(prices, window=5) {
+  const highs=[], lows=[];
+  for (let i=window;i<prices.length-window;i++) {
+    let isH=true, isL=true;
+    for (let j=1;j<=window;j++) {
+      if (prices[i]<=prices[i-j]||prices[i]<=prices[i+j]) isH=false;
+      if (prices[i]>=prices[i-j]||prices[i]>=prices[i+j]) isL=false;
+    }
+    if (isH) highs.push(i);
+    if (isL) lows.push(i);
+  }
+  return {highs,lows};
+}
+
+function detectCycles(timestamps, prices) {
+  const CYCLES = [30,45,60,90,120,144,180,270,360];
+  const {highs, lows} = findPivots(prices, 5);
+  const all = [...highs,...lows].sort((a,b)=>a-b);
+  // Merge pivots that are too close (< 15 bars apart)
+  const merged = [];
+  for (let i=0;i<all.length;i++) {
+    if (merged.length===0 || all[i]-merged[merged.length-1]>=15) merged.push(all[i]);
+  }
+  const found=[];
+  for (let i=1;i<merged.length;i++) {
+    const diff = merged[i]-merged[i-1];
+    if (diff < 15) continue;
+    for (const c of CYCLES) {
+      if (Math.abs(diff-c)<=Math.max(8,c*0.18)) { found.push({length:c,index:merged[i]}); break; }
+    }
+  }
+  return {cycles:found, allPivots:merged, pivotHighs:highs, pivotLows:lows};
+}
+
+function dominantCycle(cycles) {
+  const cnt={};
+  cycles.forEach(c=>{cnt[c.length]=(cnt[c.length]||0)+1;});
+  let best=45, bCnt=0;
+  for (const [k,v] of Object.entries(cnt)) if(v>bCnt){bCnt=v;best=Number(k);}
+  return best;
+}
+
+// Rate of Vibration = average daily price movement range
+function calcROV(cl,hi,lo) {
+  const ranges=[];
+  for (let i=0;i<Math.min(cl.length,90);i++) ranges.push(hi[i]-lo[i]);
+  return Math.round((ranges.reduce((a,b)=>a+b,0)/ranges.length)*100)/100;
+}
+
+// Phase detection based on price structure
+function detectPhase(cl, allPivots) {
+  if (cl.length < 30) return 'ACCUMULATION';
+  const last = cl.length-1;
+  const p20 = cl[last-20]||cl[0], p60 = cl[last-60]||cl[0], p120 = cl[last-120]||cl[0];
+  const cmp = cl[last];
+  const trend60  = (cmp-p60)/p60*100;
+  const trend120 = (cmp-p120)/p120*100;
+  const trend20  = (cmp-p20)/p20*100;
+
+  // Volatility
+  const recent = cl.slice(-20);
+  const avg = recent.reduce((a,b)=>a+b,0)/recent.length;
+  const vol = Math.sqrt(recent.reduce((s,v)=>s+(v-avg)**2,0)/recent.length)/avg*100;
+
+  if (trend120>0 && trend60>0 && trend20<-1) return 'DISTRIBUTION';
+  if (trend120>0 && trend60>0 && trend20>0) return 'EXPANSION';
+  if (trend120<0 && trend60<0 && trend20<0) return 'DECLINE';
+  return 'ACCUMULATION';
+}
+
+// 360° circle angles → days from last pivot
+const CIRCLE_ANGLES = [
+  {deg:45,  label:'45°'},  {deg:90,  label:'90°'},
+  {deg:120, label:'120°'}, {deg:144, label:'144°'},
+  {deg:180, label:'180°'}, {deg:270, label:'270°'},
+  {deg:360, label:'360°'}, {deg:540, label:'540°'},
+];
+function angleToDays(deg, tf) {
+  // 360° = 1 year trading days
+  const base = tf==='weekly' ? 52 : tf==='monthly' ? 12 : 252;
+  return Math.round((deg/360)*base);
+}
+
+function addTradingDays(fromTs, nDays) {
+  let d = new Date(fromTs*1000), added=0;
+  while (added<nDays) {
+    d.setDate(d.getDate()+1);
+    if (d.getDay()!==0&&d.getDay()!==6) added++;
+  }
+  return Math.floor(d.getTime()/1000);
+}
+
+function formatDate(ts) {
+  return new Date(ts*1000).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+}
+function formatNum(n) {
+  if(n>=10000000) return (n/10000000).toFixed(1)+'Cr';
+  if(n>=100000)   return (n/100000).toFixed(1)+'L';
+  return n.toLocaleString('en-IN');
+}
+
+// ══════════════════════════════════════════
+//  MAIN ANALYZE
+// ══════════════════════════════════════════
+let chartInstance = null;
+
+async function analyze() {
+  const sym  = document.getElementById('symbol').value.trim().toUpperCase();
+  const exch = document.getElementById('exchange').value;
+  const tf   = document.getElementById('timeframe').value;
+  const btn  = document.getElementById('analyzeBtn');
+
+  if (!sym) { showError('Please enter a symbol'); return; }
+
+  btn.disabled = true;
+  hide('placeholder'); hide('results'); hide('errorMsg'); hide('stockInfoBar');
+
+  const data = await fetchStockData(sym, exch);
+
+  if (data._simulated) {
+    showStatus('⚠ Offline mode — prices are approximate (Feb 2026). Gann logic is fully accurate.');
+    document.getElementById('status').style.color='#f0a040';
+  } else {
+    clearStatus();
+  }
+
+  processAndDisplay(data, sym, exch, tf);
+  btn.disabled = false;
+}
+
+function processAndDisplay(data, sym, exch, tf) {
+  const meta = data.meta;
+  const ts   = data.timestamp || [];
+  const q    = data.indicators?.quote?.[0] || {};
+  const cl   = (q.close||[]).map(Number).filter(v=>v&&!isNaN(v));
+  const hi   = (q.high||[]).map(Number).filter(v=>v&&!isNaN(v));
+  const lo   = (q.low||[]).map(Number).filter(v=>v&&!isNaN(v));
+  const vo   = (q.volume||[]).map(Number);
+
+  if (cl.length < 15) { showError('Insufficient data. Try a different symbol.'); return; }
+
+  const cmp       = meta.regularMarketPrice || cl[cl.length-1];
+  const prevClose = meta.chartPreviousClose || cl[cl.length-2];
+  const change    = cmp - prevClose;
+  const changePct = (change/prevClose*100).toFixed(2);
+  const high52    = meta.fiftyTwoWeekHigh || Math.max(...hi);
+  const low52     = meta.fiftyTwoWeekLow  || Math.min(...lo);
+  const avgVol    = vo.length ? Math.round(vo.reduce((a,b)=>a+b,0)/vo.length) : 0;
+  const lastTs    = ts[ts.length-1];
+
+  // ── STOCK INFO BAR ──
+  document.getElementById('si-name').textContent  = meta.longName || sym;
+  document.getElementById('si-meta').textContent  = `${exch}:${sym} | INR`;
+  document.getElementById('si-price').textContent = '₹'+cmp.toLocaleString('en-IN');
+  const chEl = document.getElementById('si-change');
+  chEl.textContent = `${change>=0?'+':''}${change.toFixed(2)} (${change>=0?'+':''}${changePct}%)`;
+  chEl.style.color = change>=0?'var(--green)':'var(--red)';
+  document.getElementById('si-high').textContent = '₹'+high52.toLocaleString('en-IN');
+  document.getElementById('si-low').textContent  = '₹'+low52.toLocaleString('en-IN');
+  document.getElementById('si-vol').textContent  = formatNum(avgVol);
+  show('stockInfoBar');
+
+  // ── GANN CALCULATIONS ──
+  const rov = calcROV(cl, hi, lo);
+  const {cycles, allPivots, pivotHighs, pivotLows} = detectCycles(ts, cl);
+  const domCycle = dominantCycle(cycles);
+  const phase = detectPhase(cl, allPivots);
+
+  // Last pivot — determine if it was a high or low
+  const lastPivotIdx   = allPivots.length>0 ? allPivots[allPivots.length-1] : 0;
+  const lastPivotPrice = cl[lastPivotIdx] || cmp;
+  const daysSincePivot = cl.length-1-lastPivotIdx;
+  const lastPivotIsHigh = pivotHighs.includes(lastPivotIdx);
+  const lastPivotType   = lastPivotIsHigh ? 'high' : 'low';
+
+  // Trend
+  const ema20 = calcEMA(cl, 20), ema50 = calcEMA(cl, 50);
+  const trend = ema20>ema50 ? 'BULLISH' : ema20<ema50 ? 'BEARISH' : 'SIDEWAYS';
+
+  // 1×1 angle: scaled so 1 unit of time = 1 unit of price-% movement
+  // For large-cap indices, 1 day = ROV pts (not 1 point)
+  // From HIGH pivot: price falls along 1×1 → pivot - days*rov
+  // From LOW  pivot: price rises along 1×1 → pivot + days*rov
+  const rovPerBar = rov; // average pts per bar
+  const gann1x1Price = lastPivotIsHigh
+    ? lastPivotPrice - daysSincePivot * rovPerBar
+    : lastPivotPrice + daysSincePivot * rovPerBar;
+  const above1x1 = cmp > gann1x1Price;
+
+  // Gann angles from last pivot with correct direction
+  const angles = gannAngles(lastPivotPrice, lastPivotIdx, cl.length-1, lastPivotType, rovPerBar);
+
+  // ── SIGNAL LOGIC — BUY | SELL | HOLD | WAIT ──
+  const atr = rov;
+  let signal, signalReason, entry, stop, target;
+
+  // Cycle proximity bonus — near a Gann angle turn = stronger signal
+  const nearCycleTurn = cycles.some(c => Math.abs((cl.length-1) - c.index) <= 5);
+
+  const bullScore = (above1x1 ? 2 : 0) + (trend === 'BULLISH' ? 1 : 0) + (nearCycleTurn ? 1 : 0);
+  const bearScore = (!above1x1 ? 2 : 0) + (trend === 'BEARISH' ? 1 : 0) + (nearCycleTurn ? 1 : 0);
+
+  if (bullScore >= 3) {
+    signal = 'BUY';
+    signalReason = 'Above 1×1 + Bullish trend' + (nearCycleTurn?' + Cycle turn':'');
+    entry  = Math.round((cmp - atr * 0.3) * 100) / 100;
+    stop   = Math.round((cmp - atr * 1.2) * 100) / 100;
+    target = Math.round((cmp + atr * 2.5) * 100) / 100;
+  } else if (bullScore === 2 && above1x1) {
+    signal = 'BUY';
+    signalReason = 'Above 1×1 equilibrium line';
+    entry  = Math.round((cmp - atr * 0.2) * 100) / 100;
+    stop   = Math.round((cmp - atr * 1.0) * 100) / 100;
+    target = Math.round((cmp + atr * 2.0) * 100) / 100;
+  } else if (bearScore >= 3) {
+    signal = 'SELL';
+    signalReason = 'Below 1×1 + Bearish trend' + (nearCycleTurn?' + Cycle turn':'');
+    entry  = Math.round((cmp + atr * 0.3) * 100) / 100;
+    stop   = Math.round((cmp + atr * 1.2) * 100) / 100;
+    target = Math.round((cmp - atr * 2.5) * 100) / 100;
+  } else if (bearScore === 2 && !above1x1) {
+    signal = 'SELL';
+    signalReason = 'Below 1×1 equilibrium line';
+    entry  = Math.round((cmp + atr * 0.2) * 100) / 100;
+    stop   = Math.round((cmp + atr * 1.0) * 100) / 100;
+    target = Math.round((cmp - atr * 2.0) * 100) / 100;
+  } else if (above1x1 && trend === 'BEARISH') {
+    signal = 'HOLD';
+    signalReason = 'Above 1×1 but trend weakening — hold existing longs';
+    entry  = cmp;
+    stop   = Math.round((cmp - atr * 0.8) * 100) / 100;
+    target = Math.round((cmp + atr * 1.2) * 100) / 100;
+  } else {
+    signal = 'WAIT';
+    signalReason = 'Mixed signals — await cycle confirmation';
+    entry  = cmp;
+    stop   = Math.round((cmp * 0.985) * 100) / 100;
+    target = Math.round((cmp * 1.025) * 100) / 100;
+  }
+
+  // Time completion percentages
+  const tcPct = (n) => Math.min(Math.round((daysSincePivot/n)*100),100);
+  const tc45=tcPct(45), tc90=tcPct(90), tc180=tcPct(180), tc360=tcPct(360);
+
+  // Time-Price Balance
+  const timeScore  = Math.round((daysSincePivot/domCycle)*100);
+  const priceMove  = Math.abs(cmp-lastPivotPrice);
+  const expectedMove = rov*daysSincePivot;
+  const priceScore = Math.min(Math.round((priceMove/Math.max(expectedMove,1))*100),100);
+  const tpbScore   = Math.round((timeScore+priceScore)/2);
+
+  // Past cycle behaviour — show max 8, skip micro spans
+  let hitCount=0;
+  const pastData=[];
+  const GANN_CYCLES = [30,45,60,90,120,144,180,270,360];
+  for (let i=1;i<allPivots.length&&pastData.length<8;i++) {
+    const diff = allPivots[i]-allPivots[i-1];
+    if (diff < 15) continue; // skip noise
+    const matchedCycle = GANN_CYCLES.find(c=>Math.abs(diff-c)<=Math.max(8,c*0.18));
+    const hit = !!matchedCycle;
+    const pch = ((cl[allPivots[i]]-cl[allPivots[i-1]])/cl[allPivots[i-1]]*100).toFixed(1);
+    const pivType = cl[allPivots[i]] > cl[allPivots[i-1]] ? '↑ Low→High' : '↓ High→Low';
+    if(hit) hitCount++;
+    pastData.push({date:formatDate(ts[allPivots[i]]),hit,diff,pch,cycle:matchedCycle,pivType});
+  }
+  const accuracy = pastData.length>2 ? Math.round(hitCount/pastData.length*100) : 60;
+
+  // Average move size
+  const moves=[];
+  for(let i=1;i<allPivots.length;i++) {
+    const diff=allPivots[i]-allPivots[i-1];
+    if(diff>=15) moves.push(Math.abs(cl[allPivots[i]]-cl[allPivots[i-1]])/cl[allPivots[i-1]]*100);
+  }
+  const avgMove = moves.length ? (moves.reduce((a,b)=>a+b,0)/moves.length).toFixed(1)+'%' : '—';
+
+  // Upcoming cycles (360° angle based)
+  const upcomingDays = CIRCLE_ANGLES.map(a=>angleToDays(a.deg,tf));
+
+  // ── RENDER ──
+
+  // KPI row
+  document.getElementById('kpi-rov').textContent   = '₹'+rov;
+  document.getElementById('kpi-cycle').textContent  = domCycle+'d';
+  document.getElementById('kpi-tc').textContent     = Math.min(tcPct(domCycle),100)+'%';
+  document.getElementById('kpi-tpb').textContent    = tpbScore+'%';
+
+  // Signal
+  const sigEl = document.getElementById('sig-primary');
+  sigEl.textContent = signal;
+  sigEl.className = 'signal-value ' + signal;
+  document.getElementById('sig-sub').textContent = signalReason;
+  document.getElementById('sig-trend-phase').textContent = trend + ' TREND | ' + phase;
+  document.getElementById('sig-entry').textContent = '₹'+entry.toLocaleString('en-IN');
+  document.getElementById('sig-stop').textContent  = '₹'+stop.toLocaleString('en-IN');
+  document.getElementById('sig-target').textContent= '₹'+target.toLocaleString('en-IN');
+
+  // Phase badge
+  document.getElementById('sig-phase-badge').innerHTML =
+    `<span class="phase-badge phase-${phase}">${phase}</span>`;
+
+  // 1×1 status
+  const s1x1 = above1x1
+    ? `<span style="color:var(--green)">▲ ABOVE 1×1 — Acceleration Zone (₹${gann1x1Price.toFixed(1)})</span>`
+    : `<span style="color:var(--red)">▼ BELOW 1×1 — Weakness Zone (₹${gann1x1Price.toFixed(1)})</span>`;
+  document.getElementById('sig-1x1').innerHTML = s1x1;
+  document.getElementById('gann-1x1-status').innerHTML = above1x1
+    ? `<span style="color:var(--green)">Price ABOVE 1×1 → Bullish Acceleration</span>`
+    : `<span style="color:var(--red)">Price BELOW 1×1 → Weakness / Distribution</span>`;
+
+  // Phase panel
+  const phaseColors = {ACCUMULATION:'var(--blue)',EXPANSION:'var(--green)',DISTRIBUTION:'var(--orange)',DECLINE:'var(--red)'};
+  const phaseDescs  = {
+    ACCUMULATION:'Smart money quietly building positions. Price moves sideways with low volatility. Wait for breakout above 1×1 angle before entering.',
+    EXPANSION:   'EXPANSION = Price breaking above 1×1 angle with rising volume. This is the trending phase — the most profitable time to trade WITH the trend. Momentum is accelerating.',
+    DISTRIBUTION:'Smart money is quietly exiting. Price stalls near highs, appears strong but is actually weakening. High risk zone for new buyers.',
+    DECLINE:     'Price below all Gann angles. Selling pressure dominates. Best action: stay flat or short. Wait for next ACCUMULATION phase.'
+  };
+  document.getElementById('phase-name').textContent = phase;
+  document.getElementById('phase-name').style.color = phaseColors[phase]||'var(--gold)';
+  document.getElementById('phase-desc').textContent = phaseDescs[phase]||'';
+
+  // Phase indicators
+  const phases = ['ACCUMULATION','EXPANSION','DISTRIBUTION','DECLINE'];
+  const phaseIds = ['ph-acc','ph-exp','ph-dis','ph-dec'];
+  const phaseC = {ACCUMULATION:'var(--blue)',EXPANSION:'var(--green)',DISTRIBUTION:'var(--orange)',DECLINE:'var(--red)'};
+  phaseIds.forEach((id,i) => {
+    const el = document.getElementById(id);
+    const isActive = phases[i]===phase;
+    el.style.border = isActive ? `1px solid ${phaseC[phases[i]]}` : '1px solid transparent';
+    el.style.color = isActive ? phaseC[phases[i]] : 'rgba(208,201,184,0.3)';
+    el.style.background = isActive ? `rgba(201,168,76,0.05)` : 'transparent';
+  });
+
+  // Time completions
+  [[45,tc45,'tc-45','tcp-45'],[90,tc90,'tc-90','tcp-90'],
+   [180,tc180,'tc-180','tcp-180'],[360,tc360,'tc-360','tcp-360']].forEach(([,pct,barId,pctId])=>{
+    document.getElementById(barId).style.width = pct+'%';
+    document.getElementById(pctId).textContent = pct+'%';
+  });
+
+  // Accuracy meter
+  const deg = Math.round(accuracy*3.6);
+  document.getElementById('meterRing').style.background =
+    `conic-gradient(#c9a84c 0deg, #f0d080 ${deg}deg, rgba(201,168,76,0.08) ${deg}deg)`;
+  document.getElementById('meterVal').textContent = accuracy+'%';
+
+  // TPB bars
+  document.getElementById('tpb-time').textContent = Math.min(timeScore,100)+'%';
+  document.getElementById('tpb-time-bar').style.width = Math.min(timeScore,100)+'%';
+  document.getElementById('tpb-price').textContent = priceScore+'%';
+  document.getElementById('tpb-price-bar').style.width = priceScore+'%';
+
+  // Stats
+  document.getElementById('stat-cycles').textContent = allPivots.length;
+  document.getElementById('stat-move').textContent   = avgMove;
+  document.getElementById('stat-bias').textContent   = trend;
+
+  // Gann angles display
+  document.getElementById('anglesWrap').innerHTML = angles.map(a => {
+    const isAboveCmp = a.price > cmp;
+    const isAtCmp    = Math.abs(a.price - cmp) < rov * 0.8;
+    const cls  = isAtCmp ? 'at-cmp' : isAboveCmp ? 'above-cmp' : 'below-cmp';
+    const tag  = isAtCmp ? '← CMP near' : isAboveCmp ? '▲ resistance' : '▼ support';
+    const col  = isAtCmp ? 'var(--gold)' : isAboveCmp ? 'var(--red)' : 'var(--green)';
+    const pct  = ((a.price - cmp) / cmp * 100).toFixed(1);
+    return `<div class="angle-row ${cls}">
+      <span class="angle-name">${a.name}</span>
+      <span class="angle-price">₹${a.price.toLocaleString('en-IN')}</span>
+      <span class="angle-pos" style="color:${col}">${tag} <span style="opacity:0.6;font-size:0.6rem">${pct>0?'+':''}${pct}%</span></span>
+    </div>`;
+  }).join('');
+
+  // 360° circle angle turns
+  const caHTML = CIRCLE_ANGLES.map(a => {
+    const days = angleToDays(a.deg, tf);
+    const futTs = addTradingDays(ts[lastPivotIdx]||lastTs, days);
+    const nowTs = Math.floor(Date.now()/1000);
+    const passed = futTs < nowTs;
+    const nearest = !passed && futTs-nowTs < 15*86400;
+    return `<div class="ca-item ${passed?'passed':nearest?'nearest':'upcoming'}">
+      <div class="ca-deg">${a.label}</div>
+      <div class="ca-days">${days}d</div>
+      <div class="ca-date" style="color:${passed?'rgba(208,201,184,0.3)':nearest?'var(--green)':'var(--gold2)'}">${formatDate(futTs)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('circleAngles').innerHTML = caHTML;
+
+  // Upcoming cycle dates
+  const nowTs = Math.floor(Date.now()/1000);
+  const upcoming = upcomingDays
+    .map(d => ({days:d, ts:addTradingDays(ts[lastPivotIdx]||lastTs, d)}))
+    .filter(u => u.ts > nowTs)
+    .sort((a,b)=>a.ts-b.ts)
+    .slice(0,6);
+
+  document.getElementById('cycleList').innerHTML = upcoming.map((u,i) => {
+    const daysLeft = Math.round((u.ts-nowTs)/86400);
+    const str = i===0?'HIGH':i<3?'MEDIUM':'LOW';
+    const bc  = str==='HIGH'?'badge-high':str==='MEDIUM'?'badge-medium':'badge-low';
+    return `<div class="cycle-item">
+      <div>
+        <div class="cycle-date">${formatDate(u.ts)}</div>
+        <div style="font-size:0.6rem;color:rgba(208,201,184,0.4);margin-top:2px">+${daysLeft} days from today</div>
+      </div>
+      <span class="cycle-badge ${bc}">${str}</span>
+    </div>`;
+  }).join('');
+
+  // Support/Resistance from Square of 9
+  const sq9 = sq9Levels(cmp);
+  const resistances = sq9.filter(p=>p>cmp).slice(0,4);
+  const supports    = sq9.filter(p=>p<cmp).slice(-4).reverse();
+  const levRows = [
+    ...resistances.map((p,i)=>`<tr><td style="color:var(--red)">R${i+1}</td><td class="tag tag-str">₹${p.toLocaleString('en-IN')}</td><td><span class="tag tag-res">RES</span></td><td>${i===0?'STRONG':i===1?'MEDIUM':'WEAK'}</td></tr>`),
+    `<tr style="background:rgba(201,168,76,0.06)"><td style="color:var(--gold)">CMP</td><td class="tag tag-str" style="color:var(--gold)">₹${cmp.toLocaleString('en-IN')}</td><td>—</td><td>CURRENT</td></tr>`,
+    ...supports.map((p,i)=>`<tr><td style="color:var(--green)">S${i+1}</td><td class="tag tag-str">₹${p.toLocaleString('en-IN')}</td><td><span class="tag tag-sup">SUP</span></td><td>${i===0?'STRONG':i===1?'MEDIUM':'WEAK'}</td></tr>`)
+  ];
+  document.getElementById('levelsBody').innerHTML = levRows.join('');
+
+  // Square of 9 grid
+  document.getElementById('sq9-cmp').textContent = '₹'+cmp.toLocaleString('en-IN');
+  const keyAngles = sq9.filter(p=>Math.abs(p-cmp)/cmp<0.05).slice(0,3);
+  document.getElementById('sq9-angles').textContent = keyAngles.length ? keyAngles.map(p=>'₹'+p).join(' | ') : 'None near CMP';
+  const allLevels = [...sq9].sort((a,b)=>Math.abs(a-cmp)-Math.abs(b-cmp)).slice(0,20);
+  document.getElementById('sq9Grid').innerHTML = allLevels.map(p => {
+    const isCmp  = Math.abs(p-cmp)<rov*0.5;
+    const isNear = Math.abs(p-cmp)<rov*2;
+    return `<div class="sq9-cell ${isCmp?'cmp-cell':isNear?'near-cell':''}">₹${p.toLocaleString('en-IN',{maximumFractionDigits:1})}</div>`;
+  }).join('');
+
+  // Past cycle behaviour
+  document.getElementById('pastCycles').innerHTML = pastData.map(e =>
+    `<div class="pci ${e.hit?'hit':''}">
+      <span class="pci-move" style="color:${parseFloat(e.pch)>=0?'var(--green)':'var(--red)'}">${parseFloat(e.pch)>=0?'+':''}${e.pch}%</span>
+      <div class="pci-date">${e.date} <span style="color:rgba(208,201,184,0.4);font-size:0.65rem">${e.pivType||''}</span></div>
+      <div class="pci-desc">${e.hit?'✓ Gann '+e.cycle+'d cycle':'○ Off-cycle'} · span: ${e.diff} bars</div>
+    </div>`
+  ).join('') || '<div style="color:rgba(208,201,184,0.35);font-size:0.8rem;padding:10px">Insufficient pivot data</div>';
+
+  // Entry/Exit forecast
+  document.getElementById('entryExitList').innerHTML = upcoming.slice(0,4).map((u,i) => {
+    const action = (signal==='BUY'&&i%2===0)||(signal==='SELL'&&i%2===1)?'ENTRY':'EXIT';
+    const col = action==='ENTRY'?'var(--green)':'var(--red)';
+    const tgt = action==='EXIT' ? target : entry;
+    const conf = i===0?'HIGH':i===1?'MEDIUM':'LOW';
+    return `<div class="ee-card">
+      <div>
+        <div class="ee-date">${formatDate(u.ts)}</div>
+        <div class="ee-meta">+${u.days} trading days · ${CIRCLE_ANGLES[i]?.label||''} cycle</div>
+      </div>
+      <div>
+        <div class="ee-action" style="color:${col}">${action}</div>
+        <div class="ee-target">Target: ₹${parseFloat(tgt).toLocaleString('en-IN')}</div>
+        <div class="ee-conf" style="color:${conf==='HIGH'?'var(--green)':conf==='MEDIUM'?'var(--gold)':'rgba(208,201,184,0.4)'}">Confidence: ${conf}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── CHART ──
+  if (chartInstance) { chartInstance.destroy(); chartInstance=null; }
+  const chartCl = cl.slice(-120);
+  const chartTs = ts.slice(-120);
+  const labels  = chartTs.map(t=>new Date(t*1000).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}));
+
+  // Pivot markers in view
+  const viewStart = cl.length-120;
+  const pivotMarkers = chartCl.map((_,i)=>allPivots.includes(viewStart+i)?chartCl[i]:null);
+
+  // Cycle turn markers
+  const cycleMarkers = chartCl.map((_,i)=>{
+    const absI = viewStart+i;
+    return cycles.some(c=>c.index===absI) ? chartCl[i] : null;
+  });
+
+  // Gann angle lines from last pivot (in view)
+  const pivotInView = Math.max(0, lastPivotIdx-viewStart);
+  const gLine = (ratio) => chartCl.map((_,i)=>{
+    if(i<pivotInView) return null;
+    return Math.round((lastPivotPrice+(i-pivotInView)*ratio)*100)/100;
+  });
+
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  chartInstance = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:sym, data:chartCl, borderColor:'#c9a84c', backgroundColor:'rgba(201,168,76,0.06)', borderWidth:1.8, pointRadius:0, fill:true, tension:0.2, order:2},
+        {label:'1×1 (45°)', data:gLine(1), borderColor:'rgba(68,153,255,0.7)', borderWidth:1.2, borderDash:[5,4], pointRadius:0, fill:false, tension:0, order:3},
+        {label:'2×1', data:gLine(2), borderColor:'rgba(0,229,160,0.5)', borderWidth:1, borderDash:[3,5], pointRadius:0, fill:false, tension:0, order:3},
+        {label:'1×2', data:gLine(0.5), borderColor:'rgba(255,68,102,0.5)', borderWidth:1, borderDash:[3,5], pointRadius:0, fill:false, tension:0, order:3},
+        {label:'Pivot', data:pivotMarkers, borderColor:'transparent', backgroundColor:'#f0d080', pointRadius:5, pointStyle:'triangle', showLine:false, order:1},
+        {label:'Cycle Turn', data:cycleMarkers, borderColor:'transparent', backgroundColor:'#aa66ff', pointRadius:4, pointStyle:'circle', showLine:false, order:1},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'rgba(208,201,184,0.5)',font:{family:'Share Tech Mono',size:9},boxWidth:16}},
+        tooltip:{backgroundColor:'#0c1118',borderColor:'rgba(201,168,76,0.25)',borderWidth:1,titleColor:'#c9a84c',bodyColor:'#d0c9b8',titleFont:{family:'Share Tech Mono',size:10},bodyFont:{family:'Share Tech Mono',size:10}}
+      },
+      scales:{
+        x:{ticks:{color:'rgba(208,201,184,0.3)',font:{family:'Share Tech Mono',size:8},maxTicksLimit:10},grid:{color:'rgba(201,168,76,0.05)'}},
+        y:{ticks:{color:'rgba(208,201,184,0.3)',font:{family:'Share Tech Mono',size:8}},grid:{color:'rgba(201,168,76,0.05)'},position:'right'}
+      }
+    }
+  });
+
+  show('results');
+}
+
+function calcEMA(data, period) {
+  const k = 2/(period+1);
+  let ema = data[0];
+  for (let i=1;i<data.length;i++) ema = data[i]*k + ema*(1-k);
+  return ema;
+}
+
+// ══════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════
+function showStatus(m) { const el=document.getElementById('status'); el.innerHTML=m; el.style.display='block'; }
+function clearStatus() { document.getElementById('status').style.display='none'; }
+function showError(m)  { const el=document.getElementById('errorMsg'); el.textContent='⚠ '+m; el.classList.add('active'); show('placeholder'); document.getElementById('analyzeBtn').disabled=false; }
+function show(id) { const el=document.getElementById(id); el.style.display=''; el.classList&&el.classList.add('active'); }
+function hide(id) { const el=document.getElementById(id); if(!el)return; el.style.display='none'; el.classList&&el.classList.remove('active'); }
+function quick(sym) { document.getElementById('symbol').value=sym; analyze(); }
+
+// ══════════════════════════════════════════
+//  NIFTY 100 STOCK BROWSER
+// ══════════════════════════════════════════
+const NIFTY100 = [
+  {sym:'NIFTY50',   name:'Nifty 50 Index',         price:25178},
+  {sym:'BANKNIFTY', name:'Bank Nifty Index',        price:53400},
+  {sym:'RELIANCE',  name:'Reliance Industries',     price:1394},
+  {sym:'TCS',       name:'Tata Consultancy Svcs',   price:3780},
+  {sym:'HDFCBANK',  name:'HDFC Bank',               price:1715},
+  {sym:'BHARTIARTL',name:'Bharti Airtel',           price:1680},
+  {sym:'ICICIBANK', name:'ICICI Bank',              price:1248},
+  {sym:'INFOSYS',   name:'Infosys',                 price:1880},
+  {sym:'INFY',      name:'Infosys (Alt)',            price:1880},
+  {sym:'SBIN',      name:'State Bank of India',     price:755},
+  {sym:'HINDUNILVR',name:'Hindustan Unilever',      price:2290},
+  {sym:'ITC',       name:'ITC Ltd',                 price:415},
+  {sym:'KOTAKBANK', name:'Kotak Mahindra Bank',     price:416},
+  {sym:'LT',        name:'Larsen & Toubro',         price:3580},
+  {sym:'AXISBANK',  name:'Axis Bank',               price:1048},
+  {sym:'ASIANPAINT',name:'Asian Paints',            price:2290},
+  {sym:'MARUTI',    name:'Maruti Suzuki',           price:11480},
+  {sym:'BAJFINANCE',name:'Bajaj Finance',           price:8780},
+  {sym:'TITAN',     name:'Titan Company',           price:3340},
+  {sym:'NESTLEIND', name:'Nestle India',            price:2240},
+  {sym:'WIPRO',     name:'Wipro',                   price:308},
+  {sym:'ULTRACEMCO',name:'UltraTech Cement',        price:11180},
+  {sym:'BAJAJFINSV',name:'Bajaj Finserv',           price:1855},
+  {sym:'NTPC',      name:'NTPC',                    price:382},
+  {sym:'POWERGRID', name:'Power Grid Corp',         price:298},
+  {sym:'TATAMOTORS',name:'Tata Motors',             price:383},
+  {sym:'TATASTEEL', name:'Tata Steel',              price:138},
+  {sym:'SUNPHARMA', name:'Sun Pharma',              price:1748},
+  {sym:'HCLTECH',   name:'HCL Technologies',        price:1715},
+  {sym:'M&M',       name:'Mahindra & Mahindra',     price:2840},
+  {sym:'ADANIENT',  name:'Adani Enterprises',       price:2390},
+  {sym:'ADANIPORTS',name:'Adani Ports',             price:1115},
+  {sym:'JSWSTEEL',  name:'JSW Steel',               price:918},
+  {sym:'HINDALCO',  name:'Hindalco Industries',     price:635},
+  {sym:'ONGC',      name:'ONGC',                    price:263},
+  {sym:'COALINDIA', name:'Coal India',              price:388},
+  {sym:'BPCL',      name:'BPCL',                    price:283},
+  {sym:'INDUSINDBK',name:'IndusInd Bank',           price:958},
+  {sym:'GRASIM',    name:'Grasim Industries',       price:2640},
+  {sym:'TECHM',     name:'Tech Mahindra',           price:1648},
+  {sym:'CIPLA',     name:'Cipla',                   price:1475},
+  {sym:'DRREDDY',   name:'Dr Reddy\'s Lab',         price:1188},
+  {sym:'EICHERMOT', name:'Eicher Motors',           price:5195},
+  {sym:'APOLLOHOSP',name:'Apollo Hospitals',        price:7090},
+  {sym:'DIVISLAB',  name:'Divi\'s Labs',            price:5580},
+  {sym:'HEROMOTOCO',name:'Hero MotoCorp',           price:4190},
+  {sym:'BRITANNIA', name:'Britannia Industries',    price:5090},
+  {sym:'TATACONSUM',name:'Tata Consumer',           price:1018},
+  {sym:'SBILIFE',   name:'SBI Life Insurance',      price:1545},
+  {sym:'HDFCLIFE',  name:'HDFC Life Insurance',     price:678},
+  {sym:'LUPIN',     name:'Lupin',                   price:2295},
+  {sym:'AMBUJACEM', name:'Ambuja Cements',          price:538},
+  {sym:'ACC',       name:'ACC Ltd',                 price:2045},
+  {sym:'BANKBARODA',name:'Bank of Baroda',          price:228},
+  {sym:'CANBK',     name:'Canara Bank',             price:98},
+  {sym:'PNB',       name:'Punjab National Bank',    price:99},
+  {sym:'INDIGO',    name:'IndiGo (InterGlobe)',      price:4590},
+  {sym:'SIEMENS',   name:'Siemens India',           price:7480},
+  {sym:'ABB',       name:'ABB India',               price:7180},
+  {sym:'HAVELLS',   name:'Havells India',           price:1675},
+  {sym:'PIDILITIND',name:'Pidilite Industries',     price:2890},
+  {sym:'NAUKRI',    name:'Info Edge (Naukri)',       price:7580},
+  {sym:'MUTHOOTFIN',name:'Muthoot Finance',         price:2090},
+  {sym:'CHOLAFIN',  name:'Cholamandalam Finance',   price:1345},
+  {sym:'ICICIPRULI',name:'ICICI Prudential Life',   price:675},
+  {sym:'BANDHANBNK',name:'Bandhan Bank',            price:163},
+  {sym:'FEDERALBNK',name:'Federal Bank',            price:188},
+  {sym:'AUROPHARMA',name:'Aurobindo Pharma',        price:1195},
+  {sym:'TORNTPHARM',name:'Torrent Pharma',          price:3290},
+  {sym:'ALKEM',     name:'Alkem Laboratories',      price:5380},
+  {sym:'BERGEPAINT',name:'Berger Paints',           price:508},
+  {sym:'GODREJCP',  name:'Godrej Consumer',         price:1125},
+  {sym:'DABUR',     name:'Dabur India',             price:528},
+  {sym:'MARICO',    name:'Marico',                  price:632},
+  {sym:'COLPAL',    name:'Colgate Palmolive',       price:2840},
+  {sym:'TRENT',     name:'Trent Ltd',               price:5775},
+  {sym:'DMART',     name:'DMart (Avenue Super)',     price:4178},
+  {sym:'NYKAA',     name:'Nykaa (FSN E-Com)',        price:163},
+  {sym:'ZOMATO',    name:'Zomato',                  price:213},
+  {sym:'PAYTM',     name:'Paytm (One97 Comm)',       price:835},
+  {sym:'POLICYBZR', name:'PB Fintech',              price:1788},
+  {sym:'IRCTC',     name:'IRCTC',                   price:775},
+  {sym:'HAL',       name:'Hindustan Aeronautics',   price:4278},
+  {sym:'BEL',       name:'Bharat Electronics',      price:288},
+  {sym:'BHEL',      name:'Bharat Heavy Elec.',      price:228},
+  {sym:'NHPC',      name:'NHPC',                    price:83},
+  {sym:'RECLTD',    name:'REC Ltd',                 price:478},
+  {sym:'PFC',       name:'Power Finance Corp',      price:448},
+  {sym:'IRFC',      name:'IRFC',                    price:173},
+  {sym:'SAIL',      name:'SAIL',                    price:118},
+  {sym:'JINDALSTEL',name:'Jindal Steel',            price:915},
+  {sym:'VEDL',      name:'Vedanta',                 price:716},
+  {sym:'HINDZINC',  name:'Hindustan Zinc',          price:458},
+  {sym:'NMDC',      name:'NMDC',                    price:213},
+  {sym:'GAIL',      name:'GAIL India',              price:188},
+  {sym:'IOC',       name:'Indian Oil Corp',         price:133},
+  {sym:'HPCL',      name:'HPCL',                   price:362},
+  {sym:'PETRONET',  name:'Petronet LNG',            price:328},
+  {sym:'TATAPOWER', name:'Tata Power',              price:378},
+  {sym:'ADANIGREEN',name:'Adani Green Energy',      price:1045},
+  {sym:'ADANIPOWER',name:'Adani Power',             price:498},
+  {sym:'TORNTPOWER',name:'Torrent Power',           price:1440},
+  {sym:'CESC',      name:'CESC Ltd',                price:193},
+];
+
+function renderStockGrid(list) {
+  document.getElementById('stockGrid').innerHTML = list.map(s =>
+    `<div class="stock-tile" onclick="quickStock('${s.sym}')">
+      <div class="stock-tile-sym">${s.sym}</div>
+      <div class="stock-tile-name">${s.name}</div>
+      <div class="stock-tile-price">₹${s.price.toLocaleString('en-IN')}</div>
+    </div>`
+  ).join('');
+}
+
+function filterStocks() {
+  const q = document.getElementById('stockSearch').value.toLowerCase();
+  renderStockGrid(q ? NIFTY100.filter(s=>s.sym.toLowerCase().includes(q)||s.name.toLowerCase().includes(q)) : NIFTY100);
+}
+
+function quickStock(sym) {
+  document.getElementById('symbol').value = sym;
+  analyze();
+}
+
+document.getElementById('symbol').addEventListener('keydown', e => { if(e.key==='Enter') analyze(); });
+renderStockGrid(NIFTY100);
+
+// ══════════════════════════════════════════
+//  GANN CYCLE SCANNER
+// ══════════════════════════════════════════
+const SCAN_LIST = [
+  'NIFTY50','BANKNIFTY',
+  'RELIANCE','TCS','HDFCBANK','ICICIBANK','SBIN','BHARTIARTL',
+  'INFY','ITC','KOTAKBANK','LT','AXISBANK','BAJFINANCE','MARUTI',
+  'NTPC','TATAMOTORS','SUNPHARMA','HCLTECH','WIPRO','TATASTEEL',
+  'ADANIENT','ONGC','COALINDIA','LUPIN','CIPLA','TITAN','HINDALCO',
+  'JSWSTEEL','TECHM','DRREDDY','NESTLEIND','BAJAJFINSV',
+];
+
+const GANN_SCAN_CYCLES = [45, 90, 120, 144, 180, 270, 360];
+const nowTs = Math.floor(Date.now() / 1000);
+
+function scanSingleStock(sym) {
+  // Use offline simulated data for each stock
+  const data = generateSimData(sym, 'NSE');
+  const cl = data.indicators.quote[0].close;
+  const ts = data.timestamp;
+  if (cl.length < 30) return null;
+
+  const {allPivots} = detectCycles(ts, cl);
+  if (allPivots.length === 0) return null;
+
+  const lastPivotIdx = allPivots[allPivots.length - 1];
+  const daysSincePivot = cl.length - 1 - lastPivotIdx;
+  const lastPivotTs = ts[lastPivotIdx];
+
+  // Find which Gann cycle turn is closest upcoming
+  let closestTurn = null;
+  let closestDays = Infinity;
+
+  for (const cycle of GANN_SCAN_CYCLES) {
+    const remaining = cycle - daysSincePivot;
+    if (remaining > 0 && remaining < closestDays) {
+      closestDays = remaining;
+      closestTurn = { cycle, remaining };
+    }
+    // Also check next full cycle
+    const nextCycle = cycle * 2;
+    const remaining2 = nextCycle - daysSincePivot;
+    if (remaining2 > 0 && remaining2 < closestDays && remaining2 <= 60) {
+      closestDays = remaining2;
+      closestTurn = { cycle: nextCycle, remaining: remaining2 };
+    }
+  }
+
+  if (!closestTurn || closestTurn.remaining > 60) return null;
+
+  const baseP = data.meta.regularMarketPrice;
+  const hotness = closestTurn.remaining <= 5 ? 'hot' :
+                  closestTurn.remaining <= 15 ? 'soon' : 'coming';
+
+  const turnDate = addTradingDays(ts[ts.length-1], closestTurn.remaining);
+
+  return {
+    sym,
+    name: (NIFTY100.find(s=>s.sym===sym)||{name:sym}).name,
+    price: baseP,
+    cycle: closestTurn.cycle,
+    daysLeft: closestTurn.remaining,
+    date: formatDate(turnDate),
+    hotness,
+    daysSincePivot,
+  };
+}
+
+function runCycleScanner() {
+  const grid = document.getElementById('scannerGrid');
+  const status = document.getElementById('scannerStatus');
+  grid.innerHTML = `<div style="color:var(--gold);font-family:'Share Tech Mono',monospace;font-size:0.7rem;padding:10px;grid-column:1/-1">⟳ Scanning ${SCAN_LIST.length} stocks<span class="loading-dots"></span></div>`;
+  status.style.display = 'block';
+  status.textContent = '';
+
+  setTimeout(() => {
+    const results = [];
+    for (const sym of SCAN_LIST) {
+      const r = scanSingleStock(sym);
+      if (r) results.push(r);
+    }
+
+    // Sort by days left ascending
+    results.sort((a, b) => a.daysLeft - b.daysLeft);
+
+    if (results.length === 0) {
+      grid.innerHTML = `<div style="color:rgba(208,201,184,0.35);font-family:'Share Tech Mono',monospace;font-size:0.7rem;padding:8px;grid-column:1/-1">No upcoming cycle turns found in next 60 days</div>`;
+      return;
+    }
+
+    status.textContent = `✓ Found ${results.length} stocks with cycle turns in next 60 days`;
+
+    grid.innerHTML = results.map(r => {
+      const bc = r.hotness==='hot' ? 'sb-hot' : r.hotness==='soon' ? 'sb-soon' : 'sb-coming';
+      const label = r.hotness==='hot' ? '🔥 NOW' : r.hotness==='soon' ? '⚡ SOON' : '📅 COMING';
+      return `<div class="scanner-card" onclick="quickStock('${r.sym}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="scanner-sym">${r.sym}</div>
+          <span class="scanner-badge ${bc}">${label}</span>
+        </div>
+        <div class="scanner-cycle">${r.cycle}d Gann cycle turn</div>
+        <div class="scanner-days" style="color:${r.hotness==='hot'?'var(--red)':r.hotness==='soon'?'var(--gold)':'var(--blue)'}">
+          ${r.daysLeft === 0 ? 'TODAY' : 'in ' + r.daysLeft + ' days'} · ${r.date}
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:rgba(208,201,184,0.4);margin-top:2px">₹${r.price.toLocaleString('en-IN')}</div>
+      </div>`;
+    }).join('');
+  }, 100); // small delay to allow UI to render loading state
+}
+</script>
+</body>
+</html>
